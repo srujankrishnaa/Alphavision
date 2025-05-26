@@ -1,0 +1,9 @@
+streamlit
+strands-agents
+strands-agents[ollama]
+strands-agents-tools
+mcp
+plotly
+pandas
+numpy
+requests
