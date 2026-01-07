@@ -143,8 +143,12 @@ async def analyze_stock(ticker: str, model_settings: Dict = None) -> Dict:
                 async for event in agent.stream_async(
                     f"""Analyze {ticker} stock and provide a concise alpha signal.
                     
-                    Use the scrape_as_markdown tool to get data from Investing.com for {ticker} instead of using Yahoo Finance.
-                    Investing.com page aggregates multiple technical indicators and analyst ratings, which are critical for validating signals.
+                    For Indian stocks (.NS or .BO suffix), use these data sources:
+                    - Moneycontrol.com for {ticker} technical indicators and price data
+                    - Economic Times for latest news
+                    - NSE India or BSE India official data
+                    
+                    For US stocks, use Investing.com or Yahoo Finance.
                     
                     Keep your analysis brief and focused on the most important data points.
                     
@@ -156,7 +160,10 @@ async def analyze_stock(ticker: str, model_settings: Dict = None) -> Dict:
                     Position Size: [brief recommendation]
                     
                     Technical Analysis:
-                    - Price: [current price]
+                    - Price: [current price with currency symbol]
+                    - RSI: [RSI value if available]
+                    - 50-day MA: [50-day moving average if available]
+                    - 200-day MA: [200-day moving average if available]
                     - Key indicators: [1-2 key points]
                     
                     Key Factors:

@@ -124,11 +124,13 @@ def extract_technical_data(text):
     """Extract technical data from signal text for visualization"""
     data = {}
     
-    # Extract price
-    price_match = re.search(r'Price:\s*\$?(\d+\.?\d*)', text)
+    # Extract price (supports $, ₹, and commas)
+    price_match = re.search(r'Price:\s*[\$₹]?\s*([\d,]+\.?\d*)', text)
     if price_match:
         try:
-            data['price'] = float(price_match.group(1))
+            # Remove commas and convert to float
+            price_str = price_match.group(1).replace(',', '')
+            data['price'] = float(price_str)
         except (ValueError, TypeError):
             data['price'] = None
     else:
@@ -144,28 +146,31 @@ def extract_technical_data(text):
     else:
         data['rsi'] = None
     
-    # Extract moving averages
-    ma50_match = re.search(r'50-day MA:?\s*\$?(\d+\.?\d*)', text)
+    # Extract moving averages (supports $, ₹, and commas)
+    ma50_match = re.search(r'50-day MA:?\s*[\$₹]?\s*([\d,]+\.?\d*)', text)
     if ma50_match:
         try:
-            data['ma_50'] = float(ma50_match.group(1))
+            ma_str = ma50_match.group(1).replace(',', '')
+            data['ma_50'] = float(ma_str)
         except (ValueError, TypeError):
             data['ma_50'] = None
     else:
         # Try alternative format
-        ma_match = re.search(r'below 50-day MA \(\$?(\d+\.?\d*)\)', text)
+        ma_match = re.search(r'below 50-day MA \([\$₹]?\s*([\d,]+\.?\d*)\)', text)
         if ma_match:
             try:
-                data['ma_50'] = float(ma_match.group(1))
+                ma_str = ma_match.group(1).replace(',', '')
+                data['ma_50'] = float(ma_str)
             except (ValueError, TypeError):
                 data['ma_50'] = None
         else:
             data['ma_50'] = None
     
-    ma200_match = re.search(r'200-day MA:?\s*\$?(\d+\.?\d*)', text)
+    ma200_match = re.search(r'200-day MA:?\s*[\$₹]?\s*([\d,]+\.?\d*)', text)
     if ma200_match:
         try:
-            data['ma_200'] = float(ma200_match.group(1))
+            ma_str = ma200_match.group(1).replace(',', '')
+            data['ma_200'] = float(ma_str)
         except (ValueError, TypeError):
             data['ma_200'] = None
     else:
@@ -278,10 +283,15 @@ def parse_signal_text(signal_text: str) -> dict:
         }
 
 # Functions to create visualizations
-def create_technical_analysis_chart(tech_data):
+def create_technical_analysis_chart(tech_data, ticker=None):
     """Create a technical analysis visualization"""
     if not tech_data:
         return None
+    
+    # Determine currency based on ticker
+    is_indian = ticker and ('.NS' in ticker or '.BO' in ticker)
+    currency_symbol = '₹' if is_indian else '$'
+    currency_name = 'INR' if is_indian else 'USD'
     
     # Create price and moving averages comparison
     price = tech_data.get('price', 150.0)
@@ -312,9 +322,9 @@ def create_technical_analysis_chart(tech_data):
             text_labels.append("N/A")
         else:
             try:
-                text_labels.append(f"${v:.2f}")
+                text_labels.append(f"{currency_symbol}{v:,.2f}")
             except (ValueError, TypeError):
-                text_labels.append(f"${v}")
+                text_labels.append(f"{currency_symbol}{v}")
     
     fig = go.Figure()
     
@@ -329,7 +339,7 @@ def create_technical_analysis_chart(tech_data):
     fig.update_layout(
         title='Price vs Moving Averages',
         yaxis=dict(
-            title='Price ($)'
+            title=f'Price ({currency_symbol})'
         ),
         height=400
     )
@@ -673,6 +683,11 @@ def main():
     
     st.markdown("---")
     
+    # Add hybrid AI info banner
+    st.success("""
+    ✨ **Hybrid AI System Active** | Using AWS Bedrock Nova Premier for financial analysis + Qwen2.5 (local) for sentiment analysis — combining the best of both models!
+    """)
+    
     # Add disclaimer at the top
     with st.expander("📝 Investment Disclaimer", expanded=False):
         st.markdown("""
@@ -689,39 +704,30 @@ def main():
     # Sidebar
     with st.sidebar:
         st.header("Settings")
-        ticker = st.text_input("Enter Stock Ticker", value="AAPL").upper()
+        ticker = st.text_input(
+            "Enter Stock Ticker", 
+            value="AAPL",
+            help="US stocks: AAPL, MSFT, TSLA\nIndian stocks: RELIANCE.NS, TCS.NS, INFY.NS (NSE) or .BO (BSE)"
+        ).upper()
+        
+        # Show example based on what user typed
+        if '.NS' in ticker or '.BO' in ticker:
+            st.caption("🇮🇳 Analyzing Indian stock - using Moneycontrol, ET, NSE/BSE data")
+        else:
+            st.caption("🇺🇸 Analyzing US stock - using Yahoo Finance, Investing.com, CNBC")
         
         # Model selection
-        st.subheader("Model Provider Settings")
-        model_type = st.selectbox(
-            "Select Model Provider",
-            options=["Bedrock", "Ollama"],
-            index=0,
-            help="Choose between AWS Bedrock (cloud) or Ollama (local) model"
-        )
+        st.subheader("🤖 Hybrid AI System")
+        st.info("""
+        **Optimized Model Selection:**
+        - 📊 **Financial Analysis**: AWS Bedrock Nova Premier  
+          _(Best for technical indicators & structured data)_
+        - 💬 **Sentiment Analysis**: Qwen2.5 7B (Local)  
+          _(Best for social media & news sentiment)_
+        """)
         
-        # Show Ollama settings if Ollama is selected
-        if model_type == "Ollama":
-            ollama_host = st.text_input("Ollama Host", value="http://localhost:11434")
-            ollama_model_id = st.selectbox(
-                "Ollama Model",
-                options=["llama3.1:latest", "llama3-groq-tool-use:latest", "llama3:latest", "llama3:8b", "llama3:70b", "mistral:latest", "mixtral:latest"],
-                index=0
-            )
-            # Store model settings in session state
-            model_settings = {
-                "model_type": model_type.lower(),
-                "ollama_host": ollama_host,
-                "ollama_model_id": ollama_model_id
-            }
-        else:
-            # Default to Bedrock
-            model_settings = {
-                "model_type": "bedrock"
-            }
-        
-        # Store model settings in session state
-        st.session_state.model_settings = model_settings
+        # Store dummy settings (not used anymore, but kept for compatibility)
+        st.session_state.model_settings = {"model_type": "hybrid"}
         
         if st.button("Analyze Stock"):
             # Reset all state
@@ -744,22 +750,31 @@ def main():
             set_flag("sentiment_error", False)
             
             try:
-                # Get current model settings from session state
-                current_model_settings = dict(st.session_state.model_settings)
-                logger.info(f"Starting analysis with model settings: {current_model_settings}")
+                # Hybrid approach: Use Bedrock for financial analysis, Qwen for sentiment
+                # Bedrock is better at structured data extraction (price, RSI, etc.)
+                bedrock_settings = {"model_type": "bedrock"}
                 
-                # Start analysis thread with explicit model settings
+                # Qwen is better at getting social media sentiment data
+                qwen_settings = {
+                    "model_type": "ollama",
+                    "ollama_host": "http://localhost:11434",
+                    "ollama_model_id": "qwen2.5:7b"
+                }
+                
+                logger.info(f"Using hybrid approach: Bedrock for financials, Qwen for sentiment")
+                
+                # Start analysis thread with Bedrock
                 analysis_thread = threading.Thread(
                     target=run_analysis_thread, 
-                    args=(ticker, current_model_settings)
+                    args=(ticker, bedrock_settings)
                 )
                 analysis_thread.daemon = True
                 analysis_thread.start()
                 
-                # Start sentiment thread with explicit model settings
+                # Start sentiment thread with Qwen
                 sentiment_thread = threading.Thread(
                     target=run_sentiment_thread, 
-                    args=(ticker, current_model_settings)
+                    args=(ticker, qwen_settings)
                 )
                 sentiment_thread.daemon = True
                 sentiment_thread.start()
@@ -858,7 +873,7 @@ def main():
                 with col1:
                     # Display price vs moving averages chart
                     tech_data = parsed_signal.get('technical_data', {})
-                    price_chart = create_technical_analysis_chart(tech_data)
+                    price_chart = create_technical_analysis_chart(tech_data, st.session_state.current_ticker)
                     if price_chart:
                         st.plotly_chart(price_chart, use_container_width=True)
                 

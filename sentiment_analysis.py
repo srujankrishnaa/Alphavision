@@ -35,6 +35,16 @@ parameters:
 Replace TICKER with the actual stock symbol. After getting the data, analyze it and provide your findings.
 
 Your task is to analyze market sentiment for stocks based on news and social media data.
+
+**For Indian stocks** (.NS or .BO suffix):
+- News: Moneycontrol.com, Economic Times, Business Standard, Mint
+- Social: Twitter Indian stock discussions, Indian stock forums
+- Use INR for prices
+
+**For US stocks**:
+- News: Yahoo Finance, CNBC, Bloomberg
+- Social: Twitter, Reddit (r/wallstreetbets), StockTwits
+
 You MUST return your analysis in valid JSON format as shown below:
 
 ```json
