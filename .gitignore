@@ -11,6 +11,9 @@ pip-wheel-metadata/
 flags/
 results/
 
+# Local scripts
+test_mcp.py
+
 # Local env files / secrets
 .env
 .env.*

@@ -750,31 +750,30 @@ def main():
             set_flag("sentiment_error", False)
             
             try:
-                # Hybrid approach: Use Bedrock for financial analysis, Qwen for sentiment
-                # Bedrock is better at structured data extraction (price, RSI, etc.)
-                bedrock_settings = {"model_type": "bedrock"}
-                
-                # Qwen is better at getting social media sentiment data
-                qwen_settings = {
-                    "model_type": "ollama",
-                    "ollama_host": "http://localhost:11434",
-                    "ollama_model_id": "qwen2.5:7b"
+                # Bedrock-only mode: Nova Premier for financial + Nova Lite for sentiment (no payment required)
+                financial_settings = {
+                    "model_type": "bedrock",
+                    "bedrock_model_id": "us.amazon.nova-premier-v1:0",
+                }
+                sentiment_settings = {
+                    "model_type": "bedrock",
+                    "bedrock_model_id": "amazon.nova-lite-v1:0",  # Use Nova Lite for sentiment (faster/cheaper)
                 }
                 
-                logger.info(f"Using hybrid approach: Bedrock for financials, Qwen for sentiment")
+                logger.info("Using Bedrock-only mode: Nova Premier for financial analysis + Nova Lite for sentiment")
                 
-                # Start analysis thread with Bedrock
+                # Start analysis thread with Bedrock (Nova)
                 analysis_thread = threading.Thread(
                     target=run_analysis_thread, 
-                    args=(ticker, bedrock_settings)
+                    args=(ticker, financial_settings)
                 )
                 analysis_thread.daemon = True
                 analysis_thread.start()
                 
-                # Start sentiment thread with Qwen
+                # Start sentiment thread with Bedrock (Claude)
                 sentiment_thread = threading.Thread(
                     target=run_sentiment_thread, 
-                    args=(ticker, qwen_settings)
+                    args=(ticker, sentiment_settings)
                 )
                 sentiment_thread.daemon = True
                 sentiment_thread.start()

@@ -35,7 +35,12 @@ def check_ollama_status(host="http://localhost:11434"):
         logger.error(f"❌ Error checking Ollama status: {str(e)}")
         return False, []
 
-def get_model(model_type="bedrock", ollama_host="http://localhost:11434", ollama_model_id="llama3.1:latest"):
+def get_model(
+    model_type="bedrock",
+    ollama_host="http://localhost:11434",
+    ollama_model_id="llama3.1:latest",
+    bedrock_model_id=None,
+):
     """Get a model instance based on the specified type
     
     Args:
@@ -48,8 +53,9 @@ def get_model(model_type="bedrock", ollama_host="http://localhost:11434", ollama
     """
     if model_type.lower() == "bedrock":
         logger.info("Using AWS Bedrock model")
+        resolved_model_id = bedrock_model_id or os.environ.get("BEDROCK_MODEL_ID") or "us.amazon.nova-premier-v1:0"
         return BedrockModel(
-            model_id="us.amazon.nova-premier-v1:0",
+            model_id=resolved_model_id,
             region_name=os.environ.get("AWS_REGION", "us-east-1"),
             temperature=0.1
         )

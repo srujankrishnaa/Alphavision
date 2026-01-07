@@ -89,7 +89,8 @@ async def get_sentiment_analysis(ticker: str, model_settings: Dict = None) -> Di
         model = get_model(
             model_type=model_settings.get("model_type", "bedrock"),
             ollama_host=model_settings.get("ollama_host", "http://localhost:11434"),
-            ollama_model_id=model_settings.get("ollama_model_id", "llama3-groq-tool-use")
+            ollama_model_id=model_settings.get("ollama_model_id", "llama3-groq-tool-use"),
+            bedrock_model_id=model_settings.get("bedrock_model_id"),
         )
         mcp_client = get_mcp_client()
         
