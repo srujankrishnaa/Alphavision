@@ -12,7 +12,7 @@ A real-time financial signals agent using Strands Agent SDK with Bright Data MCP
 - Risk-reward profile visualization
 - Market sentiment analysis with social media metrics
 - News source sentiment tracking with visualization
-- Support for multiple model providers (AWS Bedrock and Ollama)
+- Hybrid model support (AWS Bedrock + Ollama) for best results
 
 ## Account Setup
 
@@ -20,9 +20,17 @@ Make sure you have an account on brightdata.com (new users get free credit for t
 
 Get your API key from the user settings page https://brightdata.com/cp/setting/users
 
+## Prerequisites
+
+- Python **3.11+**
+- Node.js **18+** (required because Bright Data MCP is launched via `npx @brightdata/mcp`)
+- Bright Data API token (`API_TOKEN`)
+- **Optional / recommended** for best technicals: AWS credentials with access to Amazon Bedrock
+- **Required** for sentiment in the default hybrid setup: Ollama running locally on `http://localhost:11434`
+
 ## Setup
 
-1. First, ensure that you have Python 3.10+ installed.
+1. First, ensure that you have Python 3.11+ installed.
 
 2. Create a virtual environment to install the Strands Agents SDK and its dependencies:
 ```bash
@@ -41,23 +49,37 @@ source .venv/bin/activate
 .venv\Scripts\Activate.ps1
 ```
 
-4. Install dependencies:
+4. Upgrade pip:
+```bash
+python -m pip install --upgrade pip
+```
+
+5. Install core dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-5. Set your Bright Data API token as an environment variable:
+6. Install MCP + Strands from GitHub (required):
+```bash
+pip install git+https://github.com/modelcontextprotocol/python-sdk.git
+pip install git+https://github.com/strands-agents/sdk-python.git --no-deps
+pip install git+https://github.com/strands-agents/tools.git --no-deps
+```
+
+7. Set your Bright Data API token as an environment variable:
 ```bash
 export API_TOKEN="your-api-token-here"
 ```
 
-6. **[Only required if using Ollama model provider]** Install and setup Ollama:
+> Tip (Windows PowerShell): `setx API_TOKEN "your-api-token-here"` (then open a new terminal).
+
+8. **Install and setup Ollama** (required for the default hybrid setup):
 
    **Option 1: Native Installation**
    - Install Ollama by following the instructions at [ollama.ai](https://ollama.ai)
-   - Pull your desired model:
+   - Pull the recommended sentiment model:
      ```bash
-     ollama pull llama3
+     ollama pull qwen2.5:7b
      ```
    - Start the Ollama server:
      ```bash
@@ -83,33 +105,41 @@ export API_TOKEN="your-api-token-here"
      curl http://localhost:11434/api/tags
      ```
 
-7. Run the Streamlit app:
+9. (Optional) Configure AWS Bedrock (recommended for best technical indicators)
+
+- Configure AWS credentials (one-time):
+  - `aws configure` (or set `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`)
+- Set region (if needed):
+  - `export AWS_REGION="us-east-1"`
+
+10. Run the Streamlit app:
 ```bash
 streamlit run streamlit_app.py
 ```
 
-## Model Provider Options
+## Supported Tickers
 
-The dashboard supports two model providers:
+- **US**: `AAPL`, `MSFT`, `TSLA`, `NVDA`, ...
+- **India (NSE)**: `RELIANCE.NS`, `TCS.NS`, `INFY.NS`, ...
+- **India (BSE)**: `RELIANCE.BO`, `TCS.BO`, ...
 
-### AWS Bedrock
-- Cloud-based model with high performance
-- Requires AWS credentials
-- Default option for production use
+## Model Provider Notes (Current Default = Hybrid)
 
-### Ollama
-- Local model running on your machine
-- Requires [Ollama](https://ollama.ai/) to be installed and running
-- Supported models:
-  - llama3.1:latest (recommended for tool use)
-  - llama3:latest
-  - llama3.1:latest
-  - llama3:8b
-  - llama3:70b
-  - mistral:latest
-  - mixtral:latest
+- **Financial/technical analysis**: AWS Bedrock (Nova Premier)
+- **Sentiment analysis**: Ollama (Qwen2.5 7B)
 
-> **Note on Ollama Tool Support**: Standard Ollama models like llama3:latest don't natively support tools and may return errors like `registry.ollama.ai/library/llama3:latest does not support tools (status code: 400)`. We've implemented a workaround using specialized prompting techniques as discussed in [this GitHub issue](https://github.com/ollama/ollama/issues/5793). For best results with tools, use the llama3.1:latest model which has better tool support.
+This hybrid approach was chosen because Bedrock is stronger at structured technical extraction (price/RSI/MA parsing), while Qwen performs well for sentiment synthesis.
+
+## Deployment Notes (Important)
+
+This app **cannot be deployed on Vercel** as-is because it needs a long-running Python server (Streamlit) and (in hybrid mode) an Ollama server. Use a VM/container host instead (AWS EC2, DigitalOcean, Azure VM, etc.).
+
+Minimum production requirements:
+- A Linux VM/container
+- Python 3.11+
+- Node 18+ (for `npx @brightdata/mcp`)
+- Environment variables for `API_TOKEN` (and AWS creds if using Bedrock)
+- A process manager (systemd/supervisor) + optional Nginx reverse proxy for HTTPS
 
 ## Security Best Practices
 
