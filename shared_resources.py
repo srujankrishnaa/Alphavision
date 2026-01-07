@@ -103,15 +103,19 @@ def get_mcp_client():
         logger.error("API_TOKEN environment variable is not set. Please set it before running the application.")
         raise ValueError("API_TOKEN environment variable is not set")
     
-    return MCPClient(lambda: stdio_client(
-        StdioServerParameters(
-            command="npx",
-            args=["-y", "@brightdata/mcp"],
-            env={
-                "API_TOKEN": api_token
-            }
-        )
-    ))
+    # Increase startup timeout to 120 seconds (default is 30) for slow first-time MCP server initialization
+    return MCPClient(
+        lambda: stdio_client(
+            StdioServerParameters(
+                command="npx",
+                args=["-y", "@brightdata/mcp"],
+                env={
+                    "API_TOKEN": api_token
+                }
+            )
+        ),
+        startup_timeout=120
+    )
 
 # Test Ollama status if this file is run directly
 if __name__ == "__main__":
