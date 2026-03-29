@@ -975,6 +975,9 @@ def main():
                     dates = [(datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(6, -1, -1)]
                     
                     # Create trend that ends at current score
+                    # Guard against None (returned when model can't determine score)
+                    if base_score is None:
+                        base_score = 50
                     random.seed(base_score)  # Use score as seed for reproducibility
                     trend = [
                         max(0, min(100, base_score + random.uniform(-15, 15))) for _ in range(6)
