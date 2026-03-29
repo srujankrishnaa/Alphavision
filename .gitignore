@@ -24,3 +24,6 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Ignored AI components and Secrets
+xgboost_financial_agent.py
+financial-signals-dashboard-user_accessKeys.csv

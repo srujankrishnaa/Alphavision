@@ -683,10 +683,7 @@ def main():
     
     st.markdown("---")
     
-    # Add hybrid AI info banner
-    st.success("""
-    ✨ **Hybrid AI System Active** | Using AWS Bedrock Nova Premier for financial analysis + Qwen2.5 (local) for sentiment analysis — combining the best of both models!
-    """)
+    # Removed hybrid AI info banner per request
     
     # Add disclaimer at the top
     with st.expander("📝 Investment Disclaimer", expanded=False):
@@ -716,15 +713,7 @@ def main():
         else:
             st.caption("🇺🇸 Analyzing US stock - using Yahoo Finance, Investing.com, CNBC")
         
-        # Model selection
-        st.subheader("🤖 Hybrid AI System")
-        st.info("""
-        **Optimized Model Selection:**
-        - 📊 **Financial Analysis**: AWS Bedrock Nova Premier  
-          _(Best for technical indicators & structured data)_
-        - 💬 **Sentiment Analysis**: Qwen2.5 7B (Local)  
-          _(Best for social media & news sentiment)_
-        """)
+        # Removed Hybrid AI System info per request
         
         # Store dummy settings (not used anymore, but kept for compatibility)
         st.session_state.model_settings = {"model_type": "hybrid"}
