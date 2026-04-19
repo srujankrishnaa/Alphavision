@@ -155,6 +155,10 @@ async def get_sentiment_analysis(ticker: str, model_settings: Dict = None) -> Di
                     import json
                     import re
                     
+                    # Strip out <thinking>...</thinking> tags from the model's internal reasoning
+                    # These leak into the response and pollute the summary field
+                    response = re.sub(r'<thinking>.*?</thinking>', '', response, flags=re.DOTALL).strip()
+                    
                     # Check if the response looks like a search result list instead of JSON
                     if "search results for the query" in response or "list of search results" in response:
                         logger.warning("Response appears to be search results instead of JSON. Attempting to extract sentiment.")
