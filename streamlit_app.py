@@ -649,11 +649,13 @@ def main():
             price = st.session_state.parsed_signal['technical_data'].get('price')
         
         # Format price display properly
+        is_indian = '.NS' in ticker or '.BO' in ticker
+        currency_symbol = '₹' if is_indian else '$'
         if price is not None:
             try:
-                price_display = f"${price:.2f}"
+                price_display = f"{currency_symbol}{price:,.2f}"
             except (ValueError, TypeError):
-                price_display = f"${price}"
+                price_display = f"{currency_symbol}{price}"
         else:
             price_display = "N/A"
         
