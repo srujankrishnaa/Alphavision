@@ -638,6 +638,34 @@ def main():
     
     st.title("📈 Financial Signals Dashboard")
     
+    st.markdown("""
+    <div style="display:flex; gap:12px; align-items:center; margin-top:-10px; margin-bottom:16px; flex-wrap:wrap;">
+        <div style="background:linear-gradient(135deg,#1a1f2e,#2d3748); border:1px solid #3b82f6; border-radius:8px; padding:8px 16px; display:flex; align-items:center; gap:8px;">
+            <span style="font-size:1.2em;">📊</span>
+            <div>
+                <div style="color:#93c5fd; font-size:11px; font-weight:600; letter-spacing:0.5px; text-transform:uppercase;">Financial Analysis</div>
+                <div style="color:#f1f5f9; font-size:13px; font-weight:700;">XGBoost Classifier</div>
+            </div>
+        </div>
+        <div style="color:#64748b; font-size:18px; font-weight:300;">×</div>
+        <div style="background:linear-gradient(135deg,#1a1f2e,#2d3748); border:1px solid #8b5cf6; border-radius:8px; padding:8px 16px; display:flex; align-items:center; gap:8px;">
+            <span style="font-size:1.2em;">🧠</span>
+            <div>
+                <div style="color:#c4b5fd; font-size:11px; font-weight:600; letter-spacing:0.5px; text-transform:uppercase;">Sentiment Analysis</div>
+                <div style="color:#f1f5f9; font-size:13px; font-weight:700;">FinBERT NLP Model</div>
+            </div>
+        </div>
+        <div style="color:#64748b; font-size:18px; font-weight:300;">→</div>
+        <div style="background:linear-gradient(135deg,#1a1f2e,#2d3748); border:1px solid #10b981; border-radius:8px; padding:8px 16px; display:flex; align-items:center; gap:8px;">
+            <span style="font-size:1.2em;">⚡</span>
+            <div>
+                <div style="color:#6ee7b7; font-size:11px; font-weight:600; letter-spacing:0.5px; text-transform:uppercase;">Output</div>
+                <div style="color:#f1f5f9; font-size:13px; font-weight:700;">Alpha Signal Generation</div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
     # Display current stock and date at the top with enhanced styling
     if st.session_state.analysis_results:
         ticker = st.session_state.analysis_results.get('ticker', '')
