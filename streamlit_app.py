@@ -124,8 +124,8 @@ def extract_technical_data(text):
     """Extract technical data from signal text for visualization"""
     data = {}
     
-    # Extract price (supports $, ₹, and commas)
-    price_match = re.search(r'Price:\s*[\$₹]?\s*([\d,]+\.?\d*)', text)
+    # Extract price — handles $, ₹, Rs, and comma-formatted Indian prices
+    price_match = re.search(r'Price:\s*(?:Rs\.?|₹|\$|\€)?\s*([\d,]+\.?\d*)', text)
     if price_match:
         try:
             # Remove commas and convert to float
@@ -859,17 +859,17 @@ def main():
                     # Display signal direction chart
                     direction = parsed_signal.get('direction', 'HOLD')
                     direction_chart = create_signal_direction_chart(direction)
-                    st.plotly_chart(direction_chart, use_container_width=True)
+                    st.plotly_chart(direction_chart, width='stretch')
                     
                     # Display confidence score gauge
                     confidence = parsed_signal.get('confidence_score', 50)
                     confidence_chart = create_signal_gauge_chart(confidence)
-                    st.plotly_chart(confidence_chart, use_container_width=True)
+                    st.plotly_chart(confidence_chart, width='stretch')
                 
                 with col2:
                     # Display risk-reward chart
                     risk_reward_chart = create_risk_reward_chart(parsed_signal)
-                    st.plotly_chart(risk_reward_chart, use_container_width=True)
+                    st.plotly_chart(risk_reward_chart, width='stretch')
                     
                     # Display position size recommendation
                     position_size = parsed_signal.get('position_size', 'N/A')
@@ -893,14 +893,14 @@ def main():
                     tech_data = parsed_signal.get('technical_data', {})
                     price_chart = create_technical_analysis_chart(tech_data, st.session_state.current_ticker)
                     if price_chart:
-                        st.plotly_chart(price_chart, use_container_width=True)
+                        st.plotly_chart(price_chart, width='stretch')
                 
                 with col2:
                     # Display RSI gauge
                     rsi = tech_data.get('rsi')
                     if rsi:
                         rsi_chart = create_rsi_gauge(rsi)
-                        st.plotly_chart(rsi_chart, use_container_width=True)
+                        st.plotly_chart(rsi_chart, width='stretch')
                 
                 # Display key factors
                 st.subheader("Key Factors")
@@ -985,7 +985,7 @@ def main():
                         margin=dict(l=20, r=20, t=50, b=20)
                     )
                     
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width='stretch')
                 
                 with col2:
                     # Create sentiment trend visualization
@@ -1045,7 +1045,7 @@ def main():
                         margin=dict(l=20, r=20, t=50, b=20)
                     )
                     
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width='stretch')
                 
                 # Display social media sentiment with a radar chart
                 social_media = sentiment_data.get('social_media', {})
@@ -1112,7 +1112,7 @@ def main():
                             showlegend=False
                         )
                         
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, width='stretch')
                     
                     with col2:
                         # Display metrics with delta indicators - ensure values are numeric
@@ -1205,7 +1205,7 @@ def main():
                             margin=dict(l=20, r=20, t=50, b=20)
                         )
                         
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, width='stretch')
                     
                     # Display detailed source information
                     for source in sources:

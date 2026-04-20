@@ -34,16 +34,19 @@ parameters:
 
 Replace TICKER with the actual stock symbol. After getting the data, analyze it and provide your findings.
 
-Your task is to analyze market sentiment for stocks based on news and social media data.
+Your task is to analyze market sentiment for stocks based on news and analyst data.
 
 **For Indian stocks** (.NS or .BO suffix):
-- News: Moneycontrol.com, Economic Times, Business Standard, Mint
-- Social: Twitter Indian stock discussions, Indian stock forums
+- News: Moneycontrol.com, Economic Times, Business Standard, Mint, NDTV Profit
+- Analysts: Screener.in, Tickertape.in
 - Use INR for prices
 
 **For US stocks**:
-- News: Yahoo Finance, CNBC, Bloomberg
-- Social: Twitter, Reddit (r/wallstreetbets), StockTwits
+- News: Yahoo Finance, CNBC, Bloomberg, MarketWatch
+- Analysts: Seeking Alpha, Motley Fool
+
+DO NOT attempt to scrape Twitter, Reddit, or StockTwits — these sites block scrapers
+and will cause very long timeouts. Instead, estimate social sentiment from news tone.
 
 You MUST return your analysis in valid JSON format as shown below:
 
@@ -120,32 +123,34 @@ async def get_sentiment_analysis(ticker: str, model_settings: Dict = None) -> Di
                 response = ""
                 async for event in agent.stream_async(
                     f"""Analyze the market sentiment for {ticker} stock.
-                    
-                    Use the scrape_as_markdown tool to get data from financial news sites and social media about {ticker}.
-                    Prefer using scrape_as_markdown over other tools for better performance.
-                    
-                    Return a JSON object with the following structure:
+
+                    Use the scrape_as_markdown tool to get data from FINANCIAL NEWS SITES ONLY.
+                    For Indian stocks (.NS), use: Moneycontrol, Economic Times, Business Standard, Mint, Screener.in
+                    For US stocks, use: Yahoo Finance, CNBC, Bloomberg, MarketWatch.
+
+                    IMPORTANT: Do NOT scrape Twitter, Reddit, StockTwits, or any social media site.
+                    They block scrapers and cause very long timeouts.
+                    Instead, ESTIMATE the social_media sentiment percentages based on the news tone you find.
+
+                    Return ONLY a valid JSON object with this exact structure (no extra text):
                     {{
-                        "score": [overall sentiment score from -100 to 100],
-                        "summary": "[brief summary of overall sentiment]",
+                        "score": [overall sentiment score 0 to 100],
+                        "summary": "[concise 2-3 sentence summary of overall sentiment]",
                         "sources": [
                             {{
                                 "title": "[article title]",
                                 "source": "[source name]",
-                                "date": "[publication date]",
+                                "date": "[publication date YYYY-MM-DD]",
                                 "sentiment": "[positive/negative/neutral]",
-                                "summary": "[brief summary]"
-                            }},
-                            ...
+                                "summary": "[1 sentence summary]"
+                            }}
                         ],
                         "social_media": {{
-                            "twitter": [sentiment percentage],
-                            "reddit": [sentiment percentage],
-                            "stocktwits": [sentiment percentage]
+                            "twitter": [estimated sentiment % based on news tone],
+                            "reddit": [estimated sentiment % based on news tone],
+                            "stocktwits": [estimated sentiment % based on news tone]
                         }}
-                    }}
-                    
-                    Ensure the response is valid JSON format."""
+                    }}"""
                 ):
                     if "data" in event:
                         response += event["data"]
