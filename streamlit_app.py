@@ -9,6 +9,8 @@ import threading
 import time
 from datetime import datetime, timedelta
 import traceback
+import yfinance as yf
+import numpy as np
 from financial_signals_agent import analyze_stock
 from sentiment_analysis import get_sentiment_analysis
 
@@ -118,6 +120,42 @@ def load_results(result_type):
         with open(result_path, 'r') as f:
             return json.load(f)
     return None
+
+def get_real_market_data(ticker: str) -> dict:
+    """Fetch real-time price, RSI, and MAs from Yahoo Finance via yfinance.
+    Returns a dict with price, rsi, ma_50, ma_200 (all floats or None).
+    """
+    try:
+        tk = yf.Ticker(ticker)
+        hist = tk.history(period="1y")
+        if hist.empty:
+            logger.warning(f"yfinance returned no data for {ticker}")
+            return {}
+        
+        price = float(hist['Close'].iloc[-1])
+        
+        # 50-day and 200-day simple moving averages
+        ma_50 = float(hist['Close'].rolling(50).mean().iloc[-1]) if len(hist) >= 50 else None
+        ma_200 = float(hist['Close'].rolling(200).mean().iloc[-1]) if len(hist) >= 200 else None
+        
+        # RSI (14-period)
+        delta = hist['Close'].diff()
+        gain = delta.where(delta > 0, 0.0).rolling(14).mean()
+        loss = (-delta.where(delta < 0, 0.0)).rolling(14).mean()
+        rs = gain.iloc[-1] / loss.iloc[-1] if loss.iloc[-1] != 0 else 100.0
+        rsi = round(100 - (100 / (1 + rs)), 1)
+        
+        result = {
+            'price': round(price, 2),
+            'rsi': rsi,
+            'ma_50': round(ma_50, 2) if ma_50 else None,
+            'ma_200': round(ma_200, 2) if ma_200 else None,
+        }
+        logger.info(f"yfinance real data for {ticker}: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"yfinance fetch failed for {ticker}: {e}")
+        return {}
 
 # Function to extract technical data from signal text
 def extract_technical_data(text):
@@ -527,6 +565,23 @@ def run_analysis_thread(ticker, model_settings=None, sentiment_settings=None):
         if results and isinstance(results, dict) and results.get('status') == 'success':
             signal_text = results.get('signal', '')
             parsed_signal = parse_signal_text(signal_text)
+            
+            # ── Override LLM price with REAL yfinance data ──────────────
+            real_data = get_real_market_data(ticker)
+            if real_data:
+                tech = parsed_signal.get('technical_data', {})
+                if real_data.get('price'):
+                    tech['price'] = real_data['price']
+                if real_data.get('rsi'):
+                    tech['rsi'] = real_data['rsi']
+                if real_data.get('ma_50'):
+                    tech['ma_50'] = real_data['ma_50']
+                if real_data.get('ma_200'):
+                    tech['ma_200'] = real_data['ma_200']
+                parsed_signal['technical_data'] = tech
+                logger.info(f"Overrode LLM price with real yfinance data: {real_data}")
+            # ────────────────────────────────────────────────────────────
+            
             results['parsed_signal'] = parsed_signal
             save_results("analysis", results)
             set_flag("analysis_complete", True)
@@ -775,17 +830,17 @@ def main():
             set_flag("sentiment_error", False)
             
             try:
-                # Bedrock-only mode: Nova Premier for financial + Nova Lite for sentiment (no payment required)
+                # Bedrock-only mode: Nova Premier for both (Nova Lite cannot handle MCP tool use)
                 financial_settings = {
                     "model_type": "bedrock",
                     "bedrock_model_id": "us.amazon.nova-premier-v1:0",
                 }
                 sentiment_settings = {
                     "model_type": "bedrock",
-                    "bedrock_model_id": "amazon.nova-lite-v1:0",  # Use Nova Lite for sentiment (faster/cheaper)
+                    "bedrock_model_id": "us.amazon.nova-premier-v1:0",  # Nova Lite fails tool use
                 }
                 
-                logger.info("Using Bedrock-only mode: Nova Premier for financial analysis + Nova Lite for sentiment")
+                logger.info("Using Bedrock-only mode: Nova Premier for both financial + sentiment")
                 
                 # Start financial analysis thread first
                 # Sentiment thread will be launched automatically inside run_analysis_thread

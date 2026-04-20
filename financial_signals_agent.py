@@ -143,15 +143,20 @@ async def analyze_stock(ticker: str, model_settings: Dict = None) -> Dict:
                 response = ""
                 async for event in agent.stream_async(
                     f"""Analyze {ticker} stock and provide a concise alpha signal.
+
+                    CRITICAL TOOL INSTRUCTIONS:
+                    - ONLY use the 'scrape_as_markdown' and 'search_engine' tools.
+                    - NEVER use the 'discover' tool — it is extremely slow and will timeout.
+                    - Limit yourself to 3-4 scrape_as_markdown calls maximum.
                     
-                    For Indian stocks (.NS or .BO suffix), use these data sources:
-                    - Moneycontrol.com for {ticker} technical indicators and price data
-                    - Economic Times for latest news
-                    - NSE India or BSE India official data
+                    For Indian stocks (.NS or .BO suffix), scrape these URLs:
+                    1. scrape_as_markdown(url="https://www.moneycontrol.com/stocksmarketsindia/") for market overview
+                    2. search_engine(query="{ticker} stock price today site:moneycontrol.com OR site:economictimes.com")
+                    3. scrape_as_markdown on the top result URL for price/technical data
                     
-                    For US stocks, use Investing.com or Yahoo Finance.
+                    For US stocks, use Yahoo Finance or Investing.com.
                     
-                    Keep your analysis brief and focused on the most important data points.
+                    Keep your analysis brief. Extract the ACTUAL current price from scraped data.
                     
                     Format your response as:
                     
