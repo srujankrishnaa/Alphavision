@@ -27,3 +27,10 @@ Thumbs.db
 # Ignored AI components and Secrets
 xgboost_financial_agent.py
 financial-signals-dashboard-user_accessKeys.csv
+
+# EC2 private key — never push this
+*.pem
+alphavision-ec2.pem
+
+# Large dataset files (download locally via download_dataset.py)
+dataset/*.csv

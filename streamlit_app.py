@@ -509,13 +509,8 @@ def create_risk_reward_chart(signal_data):
     return fig
 
 # Function to run analysis in a separate thread
-def run_analysis_thread(ticker, model_settings=None):
-    """Run stock analysis in a separate thread
-    
-    Args:
-        ticker: Stock ticker symbol
-        model_settings: Dictionary with model provider settings
-    """
+def run_analysis_thread(ticker, model_settings=None, sentiment_settings=None):
+    """Run stock analysis in a separate thread. Launches sentiment thread after completion."""
     try:
         logger.info(f"Starting analysis thread for {ticker}")
         
@@ -523,32 +518,35 @@ def run_analysis_thread(ticker, model_settings=None):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         
-        # Use provided model settings or default to Bedrock
         if model_settings is None:
             model_settings = {"model_type": "bedrock"}
         logger.info(f"Using model settings: {model_settings}")
         
-        # Run the analysis (properly awaiting the coroutine)
         results = loop.run_until_complete(analyze_stock(ticker, model_settings))
         
-        # Save results to file
         if results and isinstance(results, dict) and results.get('status') == 'success':
-            # Parse the signal text
             signal_text = results.get('signal', '')
             parsed_signal = parse_signal_text(signal_text)
-            
-            # Add the parsed signal to the results
             results['parsed_signal'] = parsed_signal
-            
-            # Save to file
             save_results("analysis", results)
             set_flag("analysis_complete", True)
             logger.info(f"Analysis completed for {ticker} and saved to file")
+            
+            # ── Now start sentiment thread sequentially ──────────────────
+            if sentiment_settings is None:
+                sentiment_settings = {"model_type": "bedrock"}
+            set_flag("sentiment_started", True)
+            sentiment_thread = threading.Thread(
+                target=run_sentiment_thread,
+                args=(ticker, sentiment_settings)
+            )
+            sentiment_thread.daemon = True
+            sentiment_thread.start()
+            logger.info(f"Sentiment thread launched after financial analysis for {ticker}")
         else:
             logger.error(f"Error in analysis: {results}")
             set_flag("analysis_error", True)
         
-        # Close the loop
         loop.close()
         
     except Exception as e:
@@ -606,15 +604,22 @@ def check_and_update_results():
             st.session_state.analysis_in_progress = False
             st.session_state.analysis_complete_flag = True
             st.session_state.parsed_signal = results.get('parsed_signal', {})
-            logger.info("Updated session state with analysis results")
-        set_flag("analysis_complete", False)  # Reset the flag
-    
+            # Financial done → sentiment is now starting automatically
+            st.session_state.sentiment_in_progress = True
+            logger.info("Updated session state with analysis results — sentiment now starting")
+        set_flag("analysis_complete", False)
+
+    # Detect that sentiment thread was started (in case we missed the flip)
+    if check_flag("sentiment_started"):
+        st.session_state.sentiment_in_progress = True
+        set_flag("sentiment_started", False)
+
     # Check for analysis errors
     if check_flag("analysis_error"):
         st.session_state.analysis_in_progress = False
         st.session_state.error_message = "Error during analysis"
         logger.info("Analysis error detected")
-        set_flag("analysis_error", False)  # Reset the flag
+        set_flag("analysis_error", False)
     
     # Check for completed sentiment analysis
     if check_flag("sentiment_complete"):
@@ -624,13 +629,14 @@ def check_and_update_results():
             st.session_state.sentiment_in_progress = False
             st.session_state.sentiment_complete_flag = True
             logger.info("Updated session state with sentiment results")
-        set_flag("sentiment_complete", False)  # Reset the flag
+        set_flag("sentiment_complete", False)
     
     # Check for sentiment analysis errors
     if check_flag("sentiment_error"):
         st.session_state.sentiment_in_progress = False
         logger.info("Sentiment analysis error detected")
-        set_flag("sentiment_error", False)  # Reset the flag
+        set_flag("sentiment_error", False)
+
 
 def main():
     # Check for completed analyses
@@ -756,7 +762,7 @@ def main():
             st.session_state.current_ticker = ticker
             st.session_state.sentiment_requested = True
             st.session_state.analysis_in_progress = True
-            st.session_state.sentiment_in_progress = True
+            st.session_state.sentiment_in_progress = False  # starts after financial completes
             st.session_state.analysis_complete_flag = False
             st.session_state.sentiment_complete_flag = False
             st.session_state.error_message = None
@@ -781,21 +787,15 @@ def main():
                 
                 logger.info("Using Bedrock-only mode: Nova Premier for financial analysis + Nova Lite for sentiment")
                 
-                # Start analysis thread with Bedrock (Nova)
+                # Start financial analysis thread first
+                # Sentiment thread will be launched automatically inside run_analysis_thread
+                # once the financial analysis completes successfully
                 analysis_thread = threading.Thread(
                     target=run_analysis_thread, 
-                    args=(ticker, financial_settings)
+                    args=(ticker, financial_settings, sentiment_settings)
                 )
                 analysis_thread.daemon = True
                 analysis_thread.start()
-                
-                # Start sentiment thread with Bedrock (Claude)
-                sentiment_thread = threading.Thread(
-                    target=run_sentiment_thread, 
-                    args=(ticker, sentiment_settings)
-                )
-                sentiment_thread.daemon = True
-                sentiment_thread.start()
                 
                 # Show a message that analysis is in progress
                 st.info(f"Analysis for {ticker} started! Results will appear shortly.")
@@ -1215,7 +1215,27 @@ def main():
                         st.markdown("---")
                 
             elif st.session_state.sentiment_in_progress:
-                st.info("Sentiment analysis is in progress...")
+                st.markdown("""
+                <div style="background:linear-gradient(135deg,#1a1f2e,#162032);
+                            border:1px solid #3b82f6; border-radius:12px;
+                            padding:24px 28px; margin-top:16px;">
+                    <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+                        <span style="font-size:1.5em;">🧠</span>
+                        <span style="color:#93c5fd; font-size:1.1em; font-weight:700;">
+                            FinBERT NLP — Sentiment Analysis Running
+                        </span>
+                    </div>
+                    <p style="color:#cbd5e1; margin:0 0 8px 0;">
+                        Financial signal analysis is <b style="color:#4ade80;">complete</b>.
+                        Now running FinBERT sentiment pipeline on live news &amp; social media data&hellip;
+                    </p>
+                    <p style="color:#94a3b8; font-size:0.85em; margin:0;">
+                        This typically takes 30&ndash;60 seconds. The page refreshes automatically.
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+                with st.spinner("Scraping news sources and running FinBERT sentiment inference..."):
+                    pass
             else:
                 st.info("No sentiment data available yet.")
     
