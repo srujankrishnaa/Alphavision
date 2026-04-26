@@ -1,6 +1,7 @@
 import os
 import logging
 import requests
+from botocore.config import Config as BotocoreConfig
 from strands.models import BedrockModel
 from strands.models.ollama import OllamaModel
 from strands.tools.mcp import MCPClient
@@ -57,7 +58,11 @@ def get_model(
         return BedrockModel(
             model_id=resolved_model_id,
             region_name=os.environ.get("AWS_REGION", "us-east-1"),
-            temperature=0.1
+            temperature=0.1,
+            boto_client_config=BotocoreConfig(
+                read_timeout=300,  # 5 min — prevents timeout on large context
+                retries={"max_attempts": 2, "mode": "standard"},
+            ),
         )
     elif model_type.lower() == "ollama":
         # Check if Ollama is running before trying to use it

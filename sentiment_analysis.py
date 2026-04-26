@@ -125,17 +125,17 @@ async def get_sentiment_analysis(ticker: str, model_settings: Dict = None) -> Di
                     f"""Analyze the market sentiment for {ticker} stock.
 
                     CRITICAL TOOL INSTRUCTIONS:
-                    - ONLY use the 'scrape_as_markdown' and 'search_engine' tools.
-                    - NEVER use the 'discover' tool — it is extremely slow and will timeout.
-                    - Limit yourself to 3-4 scrape_as_markdown calls maximum.
+                    - ONLY use 'scrape_as_markdown' and 'search_engine' tools.
+                    - NEVER use the 'discover' tool — it will timeout.
+                    - You MUST make at most 1 search_engine call and 2 scrape_as_markdown calls.
+                    - Do NOT exceed 3 total tool calls. Going over will cause a timeout crash.
 
-                    Use the scrape_as_markdown tool to get data from FINANCIAL NEWS SITES ONLY.
-                    For Indian stocks (.NS), use: Moneycontrol, Economic Times, Business Standard, Mint, Screener.in
-                    For US stocks, use: Yahoo Finance, CNBC, Bloomberg, MarketWatch.
+                    Strategy: 1 search to find URLs, then scrape the top 2 results ONLY.
+                    For Indian stocks (.NS): prefer Moneycontrol and Economic Times.
+                    For US stocks: prefer Yahoo Finance and CNBC.
 
                     Do NOT scrape Twitter, Reddit, StockTwits, or any social media site.
-                    They block scrapers and cause very long timeouts.
-                    Instead, ESTIMATE the social_media sentiment percentages based on the news tone you find.
+                    ESTIMATE social_media sentiment percentages based on the news tone you find.
 
                     Return ONLY a valid JSON object with this exact structure (no extra text):
                     {{
