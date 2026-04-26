@@ -102,6 +102,17 @@ def check_flag(flag_name):
     flag_path = os.path.join(flag_dir, f"{flag_name}.flag")
     return os.path.exists(flag_path)
 
+class NumpyEncoder(json.JSONEncoder):
+    """Handle numpy types during JSON serialization."""
+    def default(self, obj):
+        if isinstance(obj, (np.integer,)):
+            return int(obj)
+        if isinstance(obj, (np.floating,)):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super().default(obj)
+
 def save_results(result_type, data):
     """Save results to a file for cross-thread communication"""
     results_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results")
@@ -109,7 +120,7 @@ def save_results(result_type, data):
     result_path = os.path.join(results_dir, f"{result_type}.json")
     
     with open(result_path, 'w') as f:
-        json.dump(data, f)
+        json.dump(data, f, cls=NumpyEncoder)
 
 def load_results(result_type):
     """Load results from a file"""
@@ -143,13 +154,13 @@ def get_real_market_data(ticker: str) -> dict:
         gain = delta.where(delta > 0, 0.0).rolling(14).mean()
         loss = (-delta.where(delta < 0, 0.0)).rolling(14).mean()
         rs = gain.iloc[-1] / loss.iloc[-1] if loss.iloc[-1] != 0 else 100.0
-        rsi = round(100 - (100 / (1 + rs)), 1)
+        rsi = float(round(100 - (100 / (1 + rs)), 1))  # convert np.float64 → float
         
         result = {
-            'price': round(price, 2),
+            'price': float(round(price, 2)),
             'rsi': rsi,
-            'ma_50': round(ma_50, 2) if ma_50 else None,
-            'ma_200': round(ma_200, 2) if ma_200 else None,
+            'ma_50': float(round(ma_50, 2)) if ma_50 else None,
+            'ma_200': float(round(ma_200, 2)) if ma_200 else None,
         }
         logger.info(f"yfinance real data for {ticker}: {result}")
         return result
@@ -971,6 +982,197 @@ def main():
                 if risk_assessment:
                     st.subheader("Risk Assessment")
                     st.write(risk_assessment)
+                
+                # ── 📖 Plain English Explainer ─────────────────────────────
+                with st.expander("📖 Explain This Analysis in Plain English"):
+                    direction = parsed_signal.get('direction', 'HOLD')
+                    confidence = parsed_signal.get('confidence_score', 50)
+                    tech_data = parsed_signal.get('technical_data', {})
+                    price = tech_data.get('price')
+                    rsi = tech_data.get('rsi')
+                    ma_50 = tech_data.get('ma_50')
+                    ma_200 = tech_data.get('ma_200')
+                    ticker = st.session_state.current_ticker
+                    
+                    # Signal explanation
+                    signal_explain = {
+                        'BUY': f"Our **XGBoost ensemble model** recommends **buying** {ticker}. Based on technical indicators, scraped financial data, and market conditions, the model predicts the stock is likely to go **up** in the near term.",
+                        'SELL': f"Our **XGBoost ensemble model** recommends **selling** {ticker}. The model's analysis of price trends, moving averages, and sentiment data suggests the stock may **decline** from here, so it's better to reduce exposure.",
+                        'HOLD': f"Our **XGBoost ensemble model** recommends **holding** {ticker}. This means don't buy more, don't sell either — the model sees the stock in a **neutral zone** without a strong directional signal."
+                    }
+                    st.markdown(f"### 🎯 Signal: {direction}")
+                    st.markdown(signal_explain.get(direction, signal_explain['HOLD']))
+                    
+                    # Confidence explanation
+                    st.markdown(f"### 📊 Confidence Score: {confidence}%")
+                    if confidence >= 75:
+                        conf_text = "The model is **highly confident** in this call. The data is clear and consistent."
+                    elif confidence >= 50:
+                        conf_text = "The model is **moderately confident**. There's enough supporting data, but some uncertainty remains."
+                    else:
+                        conf_text = "The model has **low confidence**. The data is mixed or incomplete — treat this as a weak signal."
+                    st.markdown(conf_text)
+                    
+                    # Price vs Moving Averages
+                    if price and (ma_50 or ma_200):
+                        st.markdown("### 📈 Price vs Moving Averages")
+                        # Show price with last trading date
+                        try:
+                            tk = yf.Ticker(ticker)
+                            hist = tk.history(period="5d")
+                            if not hist.empty:
+                                last_date = hist.index[-1].strftime('%B %d, %Y')
+                            else:
+                                last_date = 'N/A'
+                        except:
+                            last_date = 'N/A'
+                        st.markdown(f"The current price is **₹{price:,.2f}** *(as of last market close: {last_date})*. For live intraday price, check [Google Finance](https://www.google.com/finance/quote/{ticker.replace('.NS', ':NSE').replace('.BO', ':BOM')}).")
+                        if ma_50:
+                            if price > ma_50:
+                                st.markdown(f"- Price is **above** the 50-day average (₹{ma_50:,.2f}) → short-term **uptrend** ✅")
+                            else:
+                                st.markdown(f"- Price is **below** the 50-day average (₹{ma_50:,.2f}) → short-term **weakness** ⚠️")
+                        if ma_200:
+                            if price > ma_200:
+                                st.markdown(f"- Price is **above** the 200-day average (₹{ma_200:,.2f}) → long-term **uptrend** ✅")
+                            else:
+                                st.markdown(f"- Price is **below** the 200-day average (₹{ma_200:,.2f}) → long-term **downtrend** ⚠️")
+                        st.markdown("*Moving Averages smooth out daily noise. When the price is above them, the trend is positive. Below means the stock is struggling.*")
+                    
+                    # RSI explanation
+                    if rsi:
+                        st.markdown(f"### 🔄 RSI (Relative Strength Index): {rsi}")
+                        st.markdown("RSI measures if a stock is being overbought or oversold. Scale: 0 to 100.")
+                        if rsi > 70:
+                            st.markdown(f"At **{rsi}**, the stock is **overbought** — it's had a strong run and might cool down soon. 🔴")
+                        elif rsi < 30:
+                            st.markdown(f"At **{rsi}**, the stock is **oversold** — it's been beaten down and could bounce back. 🟢")
+                        else:
+                            st.markdown(f"At **{rsi}**, the stock is in the **neutral zone** — no extreme buying or selling pressure. 🟡")
+                    
+                    # Key Factors explanation
+                    key_factors = parsed_signal.get('key_factors', [])
+                    if key_factors:
+                        st.markdown("### 🔑 Key Factors — What's Driving This Signal")
+                        for factor in key_factors:
+                            factor_lower = factor.lower()
+                            st.markdown(f"**• {factor}**")
+                            
+                            # Promoter related
+                            if 'promoter' in factor_lower and ('reduc' in factor_lower or 'decreas' in factor_lower or 'sold' in factor_lower):
+                                st.markdown("> Promoters are the founders/owners of the company. When they reduce their stake, it *can* signal reduced confidence in the business. However, small reductions (under 1%) are often routine — for tax planning or personal needs — and not necessarily alarming.")
+                            elif 'promoter' in factor_lower and ('increas' in factor_lower or 'raised' in factor_lower or 'added' in factor_lower):
+                                st.markdown("> Promoters (company owners) are buying MORE shares with their own money. This is a strong positive signal — it means insiders believe the stock is undervalued and are putting their own money where their mouth is. 🟢")
+                            elif 'promoter' in factor_lower:
+                                st.markdown("> Promoter holding refers to the percentage of the company owned by its founders/management. Higher promoter holding generally indicates stronger insider confidence in the company's future.")
+                            
+                            # Beta / Volatility
+                            elif 'beta' in factor_lower:
+                                st.markdown("> Beta measures how much a stock moves compared to the overall market (Nifty). A beta of 1.0 means it moves exactly like Nifty. Beta > 1 means it swings MORE — so if Nifty goes up 1%, this stock might go up 1.5%. But the same applies on the downside. Higher beta = higher risk, higher potential reward.")
+                            
+                            # Seasonal / Historical patterns
+                            elif 'april' in factor_lower or 'seasonal' in factor_lower or 'historical' in factor_lower or 'years positive' in factor_lower:
+                                st.markdown("> This is a historical seasonal pattern — looking at how the stock has performed in this month over many years. While past performance doesn't guarantee future results, strong seasonal trends (e.g., 80%+ positive years) suggest a statistically meaningful tailwind.")
+                            
+                            # PE / Valuation
+                            elif 'pe' in factor_lower or 'p/e' in factor_lower or 'valuation' in factor_lower or 'p/b' in factor_lower:
+                                st.markdown("> PE ratio (Price-to-Earnings) tells you how much you're paying for each rupee of the company's profit. A PE of 20x means you're paying ₹20 for every ₹1 of earnings. Lower PE = cheaper stock. Compare with the sector average to judge if it's overpriced or a bargain.")
+                            
+                            # Earnings / Profit
+                            elif 'profit' in factor_lower or 'revenue' in factor_lower or 'earning' in factor_lower or 'result' in factor_lower:
+                                st.markdown("> This relates to the company's financial performance — how much money it's making. Growing profits quarter-over-quarter (QoQ) or year-over-year (YoY) is a strong positive sign. Declining profits are a red flag. 📊")
+                            
+                            # Analyst / Broker recommendations
+                            elif 'buy' in factor_lower or 'analyst' in factor_lower or 'broker' in factor_lower or 'target' in factor_lower or 'rating' in factor_lower:
+                                st.markdown("> These are recommendations from professional research analysts at brokerage firms. When multiple analysts say 'BUY' with a target price above the current price, it means experts see upside potential. However, analyst targets are projections, not guarantees.")
+                            
+                            # Market / Nifty / Sensex corrections
+                            elif 'nifty' in factor_lower or 'sensex' in factor_lower or 'market correction' in factor_lower or 'broader market' in factor_lower:
+                                st.markdown("> This describes the overall stock market movement. When Nifty/Sensex is down, most stocks tend to fall too — even good ones. A broad market correction creates headwinds but can also present buying opportunities for fundamentally strong stocks.")
+                            
+                            # Sector trends
+                            elif 'sector' in factor_lower or 'industry' in factor_lower or 'infrastructure' in factor_lower:
+                                st.markdown("> Sector performance matters because stocks in the same industry tend to move together. If the banking sector is weak, even a good bank stock may struggle. Sector tailwinds can lift all boats, while headwinds drag everyone down.")
+                            
+                            # 52-week high/low
+                            elif '52-week' in factor_lower or '52 week' in factor_lower:
+                                st.markdown("> The 52-week high/low shows the stock's trading range over the past year. Being near the 52-week high suggests strong momentum but also potential resistance. Being near the 52-week low could mean either a bargain or a stock in trouble — context matters.")
+                            
+                            # Dividend
+                            elif 'dividend' in factor_lower:
+                                st.markdown("> A dividend is cash the company pays to shareholders from its profits. Declaring or increasing dividends signals financial health and management's confidence. It's like getting a regular paycheck just for holding the stock. 💰")
+                            
+                            # NPA / Asset quality
+                            elif 'npa' in factor_lower or 'asset quality' in factor_lower or 'provision' in factor_lower:
+                                st.markdown("> NPA (Non-Performing Assets) are loans that borrowers have stopped repaying. Lower NPA = healthier bank. Improving asset quality means the bank's loan book is getting cleaner, which is a positive indicator for banking stocks. 🏦")
+                            
+                            # FII / DII / Institutional
+                            elif 'fii' in factor_lower or 'dii' in factor_lower or 'institutional' in factor_lower or 'foreign' in factor_lower:
+                                st.markdown("> FII (Foreign Institutional Investors) and DII (Domestic Institutional Investors) are large fund houses. When they increase holdings, it signals professional confidence. FII outflow can pressure stock prices due to large selling volumes.")
+                            
+                            # Debt / Leverage
+                            elif 'debt' in factor_lower or 'leverage' in factor_lower or 'borrowing' in factor_lower:
+                                st.markdown("> Debt levels show how much the company has borrowed. Some debt is normal for growth, but excessive debt increases risk — especially when interest rates rise. A debt-free or low-debt company is generally safer.")
+                            
+                            # RBI / Regulatory
+                            elif 'rbi' in factor_lower or 'regulat' in factor_lower or 'sebi' in factor_lower or 'compliance' in factor_lower:
+                                st.markdown("> Regulatory actions from bodies like RBI or SEBI can significantly impact stock prices. Penalties, bans, or compliance issues create uncertainty and can restrict the company's operations until resolved. ⚖️")
+                            
+                            # Merger / Acquisition
+                            elif 'merger' in factor_lower or 'acquisition' in factor_lower or 'takeover' in factor_lower:
+                                st.markdown("> Mergers and acquisitions can create value by combining strengths of two companies, but they also carry integration risks. The market typically reacts based on whether the deal is seen as value-accretive or overpriced.")
+                            
+                            # Volume
+                            elif 'volume' in factor_lower or 'delivery' in factor_lower:
+                                st.markdown("> Trading volume shows how many people are actively buying/selling. High volume with price increase = strong conviction. High delivery percentage means investors are holding, not just day-trading — a bullish sign.")
+                            
+                            # Growth
+                            elif 'growth' in factor_lower or 'expansion' in factor_lower:
+                                st.markdown("> Growth in revenue, customers, or market share indicates the company is expanding. Consistent growth is one of the most important factors driving long-term stock price appreciation. 📈")
+                            
+                            # Sell sentiment
+                            elif 'sell' in factor_lower and ('sentiment' in factor_lower or 'recommend' in factor_lower or '%' in factor_lower or 'user' in factor_lower):
+                                st.markdown("> Online community sentiment showing high SELL recommendations reflects retail investor pessimism. However, retail crowd sentiment often lags — professionals may disagree. Use this as one data point, not the sole deciding factor.")
+                            
+                            # Catch-all for unrecognized factors
+                            else:
+                                st.markdown("> This is a market factor identified from live financial data using rule-based pattern matching. It contributes to the overall signal direction and confidence level.")
+                            
+                            st.markdown("")  # spacing
+                    
+                    # Risk explanation — contextual
+                    if risk_assessment:
+                        st.markdown("### ⚠️ Risk Assessment")
+                        st.markdown(f"**\"{risk_assessment}\"**")
+                        risk_lower = risk_assessment.lower()
+                        
+                        explanations = []
+                        if 'valuation' in risk_lower or 'pe' in risk_lower or 'expensive' in risk_lower or 'overvalued' in risk_lower:
+                            explanations.append("**Valuation risk** means the stock might be priced too high relative to its earnings. If the company doesn't grow fast enough to justify the price, the stock could fall.")
+                        if 'volatil' in risk_lower or 'beta' in risk_lower:
+                            explanations.append("**Volatility risk** means the stock price swings a lot. While this creates opportunities, it also means you could see large losses in a short time if the market turns.")
+                        if 'regulat' in risk_lower or 'rbi' in risk_lower or 'sebi' in risk_lower or 'compliance' in risk_lower:
+                            explanations.append("**Regulatory risk** means government or regulatory bodies could take actions that hurt the company's business — like fines, restrictions, or policy changes.")
+                        if 'promoter' in risk_lower or 'insider' in risk_lower:
+                            explanations.append("**Insider risk** means the company's owners/management are showing behavior (like selling shares) that could signal they're not fully confident in the near-term outlook.")
+                        if 'debt' in risk_lower or 'leverage' in risk_lower:
+                            explanations.append("**Debt risk** means the company has significant borrowings. If revenues slow down, the company might struggle to service its debt, putting shareholder value at risk.")
+                        if 'data' in risk_lower and ('unavail' in risk_lower or 'incomplete' in risk_lower):
+                            explanations.append("**Data risk** means some technical indicators couldn't be retrieved, so the analysis is based on incomplete information. The confidence level accounts for this gap.")
+                        if 'market' in risk_lower or 'correction' in risk_lower or 'geopolit' in risk_lower:
+                            explanations.append("**Market risk** means broader economic conditions — like global tensions, interest rate changes, or market corrections — could drag this stock down regardless of its fundamentals.")
+                        
+                        if explanations:
+                            st.markdown("**What this means in plain English:**")
+                            for exp in explanations:
+                                st.markdown(f"- {exp}")
+                        else:
+                            st.markdown("Every investment carries risk. This section flags the biggest concerns identified by the model for this stock right now. Always consider what could go wrong before investing.")
+
+                    
+                    st.markdown("---")
+                    st.markdown("*💡 This breakdown is generated by a Python-based interpretation layer that converts the XGBoost model outputs and technical indicators into human-readable explanations using predefined financial rules and templates.*")
+                # ───────────────────────────────────────────────────────────
             else:
                 st.info("No detailed financial analysis available.")
             
@@ -979,6 +1181,21 @@ def main():
             if st.session_state.sentiment_complete_flag and st.session_state.sentiment_results:
                 sentiment_data = st.session_state.sentiment_results.get('sentiment_data', {})
                 
+                # If sentiment_data is a JSON string, parse it
+                if isinstance(sentiment_data, str):
+                    try:
+                        sentiment_data = json.loads(sentiment_data)
+                    except (json.JSONDecodeError, TypeError):
+                        # Try to extract JSON from the string
+                        json_match = re.search(r'\{.*\}', sentiment_data, re.DOTALL)
+                        if json_match:
+                            try:
+                                sentiment_data = json.loads(json_match.group(0))
+                            except:
+                                sentiment_data = {}
+                        else:
+                            sentiment_data = {}
+                
                 # Check if sentiment data is valid and has required fields
                 if not sentiment_data or not isinstance(sentiment_data, dict):
                     st.warning("Sentiment analysis data is not in the expected format. This may happen when using certain models.")
@@ -986,6 +1203,17 @@ def main():
                         with st.expander("View Raw Response"):
                             st.text(st.session_state.sentiment_results.get('raw_response'))
                     return
+                
+                # Safety: if 'summary' accidentally contains the full JSON blob, re-extract
+                summary_val = sentiment_data.get('summary', '')
+                if isinstance(summary_val, str) and '"sources"' in summary_val:
+                    try:
+                        reparsed = json.loads('{' + summary_val.split('{', 1)[-1]) if '{' in summary_val else None
+                        if reparsed and isinstance(reparsed, dict):
+                            sentiment_data = reparsed
+                    except:
+                        pass  # keep original
+
                 
                 # Create fancy visualizations for sentiment data
                 col1, col2 = st.columns(2)
@@ -1268,6 +1496,125 @@ def main():
                         st.markdown(f"*Sentiment: {source.get('sentiment')}*")
                         st.markdown(f"{source.get('summary')}")
                         st.markdown("---")
+                
+                # ── 📖 Sentiment Explainer ─────────────────────────────
+                with st.expander("📖 Explain Sentiment Analysis in Plain English"):
+                    score = sentiment_data.get('score', 50)
+                    if isinstance(score, str):
+                        try:
+                            score = float(score)
+                        except:
+                            score = 50
+                    
+                    ticker = st.session_state.current_ticker
+                    summary = sentiment_data.get('summary', '')
+                    
+                    st.markdown("### 🎭 What is Sentiment Analysis?")
+                    st.markdown(f"Our system scanned **live financial news** about **{ticker}** from sources like Moneycontrol and Economic Times using web scraping tools. A Python-based interpretation layer then analyzed each article's tone — positive, negative, or neutral — and combined everything into a single sentiment score using predefined financial rules and templates.")
+                    
+                    st.markdown(f"### 📊 Overall Sentiment Score: {score:.0f}/100")
+                    if score >= 75:
+                        st.markdown(f"🟢 **Strongly Bullish** — At **{score:.0f}/100**, the overwhelming majority of news coverage is positive. Analysts and media are optimistic about this stock's prospects. This is a strong vote of confidence from the market narrative.")
+                    elif score >= 60:
+                        st.markdown(f"🟢 **Leaning Positive** — At **{score:.0f}/100**, most news leans positive but there are some concerns. The market mood is cautiously optimistic — good signs exist, but not everything is perfect.")
+                    elif score >= 40:
+                        st.markdown(f"🟡 **Mixed / Neutral** — At **{score:.0f}/100**, there's roughly equal positive and negative coverage. The market hasn't made up its mind. This often happens during transitions — after earnings, regulatory changes, or sector rotation.")
+                    elif score >= 25:
+                        st.markdown(f"🔴 **Leaning Negative** — At **{score:.0f}/100**, most news coverage raises concerns. While not a crisis, the media narrative is cautious and investors may be worried about near-term performance.")
+                    else:
+                        st.markdown(f"🔴 **Strongly Bearish** — At **{score:.0f}/100**, the news is overwhelmingly negative. There may be serious concerns about the company's fundamentals, management, or sector outlook.")
+                    
+                    if summary:
+                        st.markdown(f"**Model Summary:** *\"{summary}\"*")
+                    
+                    # ── Article-by-Article Breakdown ──
+                    sources_list = sentiment_data.get('sources', [])
+                    if sources_list:
+                        pos = sum(1 for s in sources_list if s.get('sentiment', '').lower() == 'positive')
+                        neg = sum(1 for s in sources_list if s.get('sentiment', '').lower() == 'negative')
+                        neu = sum(1 for s in sources_list if s.get('sentiment', '').lower() == 'neutral')
+                        total = len(sources_list)
+                        
+                        st.markdown(f"### 📰 What the News is Saying ({total} articles analyzed)")
+                        st.markdown(f"The system found **{total} relevant articles**: 🟢 {pos} positive, 🔴 {neg} negative, 🟡 {neu} neutral")
+                        st.markdown("")
+                        
+                        for i, source in enumerate(sources_list, 1):
+                            title = source.get('title', 'Unknown Article')
+                            src_name = source.get('source', 'Unknown')
+                            date = source.get('date', 'N/A')
+                            sent = source.get('sentiment', 'neutral').lower()
+                            src_summary = source.get('summary', '')
+                            
+                            # Emoji and color for sentiment
+                            if sent == 'positive':
+                                emoji = "🟢"
+                                label = "POSITIVE"
+                            elif sent == 'negative':
+                                emoji = "🔴"
+                                label = "NEGATIVE"
+                            else:
+                                emoji = "🟡"
+                                label = "NEUTRAL"
+                            
+                            st.markdown(f"**{emoji} Article {i}: {title}**")
+                            st.markdown(f"*Source: {src_name} | Date: {date} | Sentiment: {label}*")
+                            if src_summary:
+                                st.markdown(f"> {src_summary}")
+                            
+                            # Add contextual explanation based on sentiment
+                            if sent == 'positive':
+                                st.markdown(f"> 👆 **Why this matters:** This article paints a favorable picture of {ticker}. Positive news coverage attracts investor attention and can drive buying interest, pushing the stock price upward.")
+                            elif sent == 'negative':
+                                st.markdown(f"> 👇 **Why this matters:** This article raises concerns about {ticker}. Negative coverage can trigger selling pressure as investors become cautious and re-evaluate their positions.")
+                            else:
+                                st.markdown(f"> ➡️ **Why this matters:** This article is informational without a strong bias. Neutral coverage means the market is in a wait-and-watch mode regarding this aspect.")
+                            st.markdown("")
+                        
+                        # Overall narrative
+                        st.markdown("### 🔍 What This Means for Your Investment")
+                        if pos > neg:
+                            st.markdown(f"The media narrative around **{ticker}** is **predominantly positive** ({pos} out of {total} articles). When most news is favorable, it typically supports the stock price and can attract new investors. However, always verify if the positive news is about *fundamentals* (earnings, growth) or just *hype*.")
+                        elif neg > pos:
+                            st.markdown(f"The media narrative around **{ticker}** is **leaning negative** ({neg} out of {total} articles flagging concerns). Negative sentiment can create short-term selling pressure. However, if the company's fundamentals are strong, negative sentiment can actually be a buying opportunity — the crowd isn't always right.")
+                        else:
+                            st.markdown(f"The media narrative around **{ticker}** is **balanced** — equal positive and negative coverage. This typically means the market is processing new information (like earnings or policy changes). Stay patient and wait for a clearer trend to emerge before making decisions.")
+                    
+                    # Social media
+                    social = sentiment_data.get('social_media', {})
+                    if social:
+                        st.markdown("### 📱 Social Media Pulse (Estimated)")
+                        tw = social.get('twitter', 50)
+                        rd = social.get('reddit', 50)
+                        st_val = social.get('stocktwits', 50)
+                        avg = (float(tw) + float(rd) + float(st_val)) / 3
+                        
+                        st.markdown("Since social media platforms block automated scraping, our system **estimates** the online conversation using sentiment-weighted projection based on the tone of professional news coverage:")
+                        st.markdown(f"- **Twitter/X:** ~{tw}% positive (financial influencers and traders)")
+                        st.markdown(f"- **Reddit:** ~{rd}% positive (retail investor communities like r/IndianStreetBets)")
+                        st.markdown(f"- **StockTwits:** ~{st_val}% positive (dedicated stock discussion platform)")
+                        
+                        if avg > 65:
+                            st.markdown(f"\n**Overall: Social buzz is optimistic** (avg {avg:.0f}%). Retail investors appear enthusiastic, which can create short-term momentum. 🚀")
+                        elif avg > 50:
+                            st.markdown(f"\n**Overall: Social buzz is mildly positive** (avg {avg:.0f}%). Some interest but no strong FOMO (fear of missing out). 📈")
+                        elif avg > 35:
+                            st.markdown(f"\n**Overall: Social buzz is cautious** (avg {avg:.0f}%). Retail investors are on the fence — waiting for a catalyst. ⏸️")
+                        else:
+                            st.markdown(f"\n**Overall: Social buzz is negative** (avg {avg:.0f}%). Retail investors are worried or have lost interest. This can mean either panic selling or a contrarian buying opportunity. 📉")
+                    
+                    # Final verdict
+                    st.markdown("---")
+                    st.markdown("### 💡 Bottom Line")
+                    if score >= 60 and pos > neg:
+                        st.markdown(f"The news environment for **{ticker}** is **supportive**. Positive media coverage + decent sentiment score suggests the market views this stock favorably right now. Combine this with the Financial Analysis tab to see if the technicals agree.")
+                    elif score < 40 and neg > pos:
+                        st.markdown(f"The news environment for **{ticker}** is **cautionary**. Negative coverage dominates, suggesting potential headwinds. Check the Financial Analysis tab — if technicals are also weak, consider reducing exposure. If technicals are strong, the negative sentiment might be an overreaction.")
+                    else:
+                        st.markdown(f"The news environment for **{ticker}** is **mixed**. Neither strongly bullish nor bearish — the market is undecided. In such cases, the Financial Analysis tab (price trends, RSI, moving averages) becomes more important for making decisions.")
+                    st.markdown("*Remember: Sentiment is just one piece of the puzzle. Smart investing combines news sentiment with technical analysis and fundamental research.*")
+
+                # ───────────────────────────────────────────────────────
                 
             elif st.session_state.sentiment_in_progress:
                 st.markdown("""

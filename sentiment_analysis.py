@@ -127,12 +127,20 @@ async def get_sentiment_analysis(ticker: str, model_settings: Dict = None) -> Di
                     CRITICAL TOOL INSTRUCTIONS:
                     - ONLY use 'scrape_as_markdown' and 'search_engine' tools.
                     - NEVER use the 'discover' tool — it will timeout.
-                    - You MUST make at most 1 search_engine call and 2 scrape_as_markdown calls.
-                    - Do NOT exceed 3 total tool calls. Going over will cause a timeout crash.
+                    - You MUST make at most 1 search_engine call and 3 scrape_as_markdown calls.
+                    - Do NOT exceed 4 total tool calls. Going over will cause a timeout crash.
 
-                    Strategy: 1 search to find URLs, then scrape the top 2 results ONLY.
-                    For Indian stocks (.NS): prefer Moneycontrol and Economic Times.
-                    For US stocks: prefer Yahoo Finance and CNBC.
+                    Strategy: 1 search to find URLs, then scrape the top 3 results.
+                    PRIMARY sources for Indian stocks (.NS): Moneycontrol, Economic Times, Business Standard.
+                    PRIMARY sources for US stocks: Yahoo Finance, CNBC, MarketWatch.
+
+                    FALLBACK: If primary sources don't yield 3+ articles, use these backup sources:
+                    Indian: Livemint (livemint.com), NDTV Profit (ndtvprofit.com), Financial Express (financialexpress.com), Screener.in, Finology (ticker.finology.in)
+                    US: Reuters, Seeking Alpha, Investopedia
+
+                    IMPORTANT: You MUST extract at least 3 news articles in the "sources" array.
+                    Each scraped page often contains multiple headlines — pick the most relevant ones.
+                    If a page has 5 headlines, include the top 2-3 from that page.
 
                     Do NOT scrape Twitter, Reddit, StockTwits, or any social media site.
                     ESTIMATE social_media sentiment percentages based on the news tone you find.
@@ -234,20 +242,20 @@ async def get_sentiment_analysis(ticker: str, model_settings: Dict = None) -> Di
                         }
                     
                     # Extract JSON from the response (it might be surrounded by markdown code blocks)
-                    json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', response, re.DOTALL)
+                    json_match = re.search(r'```(?:json)?\s*(\{.*\})\s*```', response, re.DOTALL)
                     if json_match:
                         json_str = json_match.group(1)
                     else:
-                        json_str = response
+                        # Try to find outermost JSON object in raw response
+                        brace_match = re.search(r'(\{.*\})', response, re.DOTALL)
+                        if brace_match:
+                            json_str = brace_match.group(1)
+                        else:
+                            json_str = response
                     
                     # Clean up the string to ensure it's valid JSON
                     json_str = re.sub(r'(?m)^\s*//.*$', '', json_str)  # Remove comments
-                    
-                    # Try to find a JSON-like structure if direct parsing fails
-                    if not json_str.strip().startswith('{'):
-                        potential_json = re.search(r'\{.*\}', json_str, re.DOTALL)
-                        if potential_json:
-                            json_str = potential_json.group(0)
+                    json_str = json_str.strip()
                     
                     try:
                         sentiment_data = json.loads(json_str)
